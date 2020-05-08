@@ -32,7 +32,7 @@ void detectObjects(cv::Mat& img, std::vector<BoundingBox>& bBoxes, float confThr
     cv::Mat blob;
     vector<cv::Mat> netOutput;
     double scalefactor = 1/255.0;
-    cv::Size size = cv::Size(416, 416);
+    cv::Size size = cv::Size(608, 608);
     cv::Scalar mean = cv::Scalar(0,0,0);
     bool swapRB = false;
     bool crop = false;
@@ -120,7 +120,7 @@ void detectObjects(cv::Mat& img, std::vector<BoundingBox>& bBoxes, float confThr
             cv::putText(visImg, label, cv::Point(left, top), cv::FONT_ITALIC, 0.75, cv::Scalar(0,0,0),1);
             
         }
-        
+        // cv::resize(visImg, visImg, cv::Size(), 0.5, 0.5);
         string windowName = "Object classification";
         cv::namedWindow( windowName, 1 );
         cv::imshow( windowName, visImg );
