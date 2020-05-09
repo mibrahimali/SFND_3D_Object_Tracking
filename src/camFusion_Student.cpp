@@ -2,6 +2,9 @@
 #include <iostream>
 #include <algorithm>
 #include <numeric>
+#include <map>
+#include <unordered_map>
+#include <utility>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
@@ -155,5 +158,81 @@ void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
 
 void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bbBestMatches, DataFrame &prevFrame, DataFrame &currFrame)
 {
-    // ...
+    std::map<std::pair<int,int>,int> boxAssociations;
+    for(auto match : matches)
+    {
+        auto prev_keypoint = prevFrame.keypoints[match.queryIdx];
+        auto curr_keypoint = currFrame.keypoints[match.trainIdx];
+
+        int prev_boxId = -1;
+        int curr_boxId = -1;
+        for(auto bbox : prevFrame.boundingBoxes)
+        {
+            if(bbox.roi.contains(prev_keypoint.pt))
+            {
+                prev_boxId = bbox.boxID;
+                break;
+            }
+        }
+
+        for(auto bbox : currFrame.boundingBoxes)
+        {
+            if(bbox.roi.contains(curr_keypoint.pt))
+            {
+                curr_boxId = bbox.boxID;
+                break;
+            }
+        }
+        if(prev_boxId != -1 && curr_boxId != -1)
+        {
+            auto boxPair = std::make_pair(prev_boxId,curr_boxId);
+            auto it = boxAssociations.find(boxPair);
+            if (it != boxAssociations.end())
+            {
+                (it->second)++;
+            }
+            else
+            {
+                boxAssociations[boxPair]=1;
+            }
+            
+        }
+    }
+    // this code to print out association map with count of each association
+    // for (auto itr = boxAssociations.begin(); itr != boxAssociations.end(); ++itr) { 
+    //     cout << "(" << (itr->first).first << ", "<< (itr->first).second
+    //          << ") counted " << itr->second << " times \n"; 
+    // } 
+
+    for (auto itr = boxAssociations.begin(); itr != boxAssociations.end(); ++itr) 
+    { 
+        
+        if (bbBestMatches.find((itr->first).first) == bbBestMatches.end())
+        {
+            auto currentBoxId =  (itr->first).first;
+            auto candidate = (itr->first).second;
+            auto score = itr->second;
+            auto itr2 = itr;
+            itr2++;
+            for (;itr2 != boxAssociations.end() ; ++itr2)
+            {
+                if ((itr2->first).first == currentBoxId)
+                {
+                    if (itr2->second > score)
+                    {
+                        candidate = (itr2->first).second;
+                        score = itr2->second;
+                    }
+                }
+                else
+                {
+                    break;  // take advantage of ordered map 
+                }  
+            }
+            bbBestMatches[currentBoxId] = candidate;
+        }
+    } 
+    // for (auto itr = bbBestMatches.begin(); itr != bbBestMatches.end(); ++itr) { 
+    //     cout << "(" << itr->first << ", "<< itr->second << ") \n";
+    // } 
 }

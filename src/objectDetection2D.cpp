@@ -32,7 +32,7 @@ void detectObjects(cv::Mat& img, std::vector<BoundingBox>& bBoxes, float confThr
     cv::Mat blob;
     vector<cv::Mat> netOutput;
     double scalefactor = 1/255.0;
-    cv::Size size = cv::Size(608, 608);
+    cv::Size size = cv::Size(416, 416);
     cv::Scalar mean = cv::Scalar(0,0,0);
     bool swapRB = false;
     bool crop = false;
@@ -110,7 +110,7 @@ void detectObjects(cv::Mat& img, std::vector<BoundingBox>& bBoxes, float confThr
             cv::rectangle(visImg, cv::Point(left, top), cv::Point(left+width, top+height),cv::Scalar(0, 255, 0), 2);
             
             string label = cv::format("%.2f", (*it).confidence);
-            label = classes[((*it).classID)] + ":" + label;
+            label = classes[((*it).classID)] + ":" + label + "id ="+cv::format("%d", (*it).boxID);
         
             // Display label at the top of the bounding box
             int baseLine;
