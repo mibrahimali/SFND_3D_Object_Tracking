@@ -13,6 +13,24 @@
 
 using namespace std;
 
+// Utility Function to calculate IQR test bounds from data
+//https://stackoverflow.com/questions/11964552/finding-quartiles
+std::pair<float,float> IQR_testintervals(std::vector<double> &data) 
+{ 
+    auto const Q1 = data.size() / 4;
+    auto const Q2 = data.size() / 2;
+    auto const Q3 = Q1 + Q2;
+
+    std::sort(data.begin(),data.end());
+    // Median of first half 
+    float Q1Val = data[Q1]; 
+  
+    // Median of second half 
+    float Q3Val = data[Q3]; 
+    float iqr = Q3Val - Q1Val;
+    // IQR calculation 
+    return std::make_pair(Q1Val-iqr,Q3Val+iqr); 
+} 
 
 // Create groups of Lidar points whose projection into the camera falls into the same bounding box
 void clusterLidarWithROI(std::vector<BoundingBox> &boundingBoxes, std::vector<LidarPoint> &lidarPoints, float shrinkFactor, cv::Mat &P_rect_xx, cv::Mat &R_rect_xx, cv::Mat &RT)
@@ -137,7 +155,30 @@ void show3DObjects(std::vector<BoundingBox> &boundingBoxes, cv::Size worldSize, 
 // associate a given bounding box with the keypoints it contains
 void clusterKptMatchesWithROI(BoundingBox &boundingBox, std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPoint> &kptsCurr, std::vector<cv::DMatch> &kptMatches)
 {
-    // ...
+    std::vector<cv::DMatch> boxMatches;
+    std::vector<double> matchDist;
+    for (auto matchItr = kptMatches.begin();matchItr !=kptMatches.end();matchItr++)
+    {
+        auto prev_kpt = kptsPrev[matchItr->queryIdx];
+        auto curr_kpt = kptsCurr[matchItr->trainIdx];
+        double dist = matchItr->distance;
+        if ( boundingBox.roi.contains(curr_kpt.pt))
+        {
+            boxMatches.push_back(*matchItr);
+            matchDist.push_back(dist);
+        }
+    }
+    // filter matches outliers using IQR check 
+    auto iqrTestBound = IQR_testintervals(matchDist);
+    for (auto boxMatch : boxMatches)
+    {
+        if ( boxMatch.distance >= iqrTestBound.first && boxMatch.distance <= iqrTestBound.second)
+        {
+            boundingBox.kptMatches.push_back(boxMatch);
+        }
+    }
+
+
 }
 
 
@@ -145,9 +186,53 @@ void clusterKptMatchesWithROI(BoundingBox &boundingBox, std::vector<cv::KeyPoint
 void computeTTCCamera(std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPoint> &kptsCurr, 
                       std::vector<cv::DMatch> kptMatches, double frameRate, double &TTC, cv::Mat *visImg)
 {
-    // ...
-}
+    // compute distance ratios between all matched keypoints
+    vector<double> distRatios; // stores the distance ratios for all keypoints between curr. and prev. frame
+    for (auto it1 = kptMatches.begin(); it1 != kptMatches.end() - 1; ++it1)
+    { // outer kpt. loop
 
+        // get current keypoint and its matched partner in the prev. frame
+        cv::KeyPoint kpOuterCurr = kptsCurr.at(it1->trainIdx);
+        cv::KeyPoint kpOuterPrev = kptsPrev.at(it1->queryIdx);
+
+        for (auto it2 = kptMatches.begin() + 1; it2 != kptMatches.end(); ++it2)
+        { // inner kpt.-loop
+
+            double minDist = 100.0; // min. required distance
+
+            // get next keypoint and its matched partner in the prev. frame
+            cv::KeyPoint kpInnerCurr = kptsCurr.at(it2->trainIdx);
+            cv::KeyPoint kpInnerPrev = kptsPrev.at(it2->queryIdx);
+
+            // compute distances and distance ratios
+            double distCurr = cv::norm(kpOuterCurr.pt - kpInnerCurr.pt);
+            double distPrev = cv::norm(kpOuterPrev.pt - kpInnerPrev.pt);
+
+            if (distPrev > std::numeric_limits<double>::epsilon() && distCurr >= minDist)
+            { // avoid division by zero
+
+                double distRatio = distCurr / distPrev;
+                distRatios.push_back(distRatio);
+            }
+        } // eof inner loop over all matched kpts
+    }     // eof outer loop over all matched kpts
+
+    // only continue if list of distance ratios is not empty
+    if (distRatios.size() == 0)
+    {
+        TTC = NAN;
+        return;
+    }
+
+
+    std::sort(distRatios.begin(), distRatios.end());
+    long medIndex = floor(distRatios.size() / 2.0);
+    double medDistRatio = distRatios.size() % 2 == 0 ? (distRatios[medIndex - 1] + distRatios[medIndex]) / 2.0 : distRatios[medIndex]; // compute median dist. ratio to remove outlier influence
+
+    double dT = 1 / frameRate;
+    TTC = -dT / (1 - medDistRatio);
+
+}
 
 void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
                      std::vector<LidarPoint> &lidarPointsCurr, double frameRate, double &TTC)
