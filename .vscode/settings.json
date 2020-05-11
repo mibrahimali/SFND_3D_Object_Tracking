@@ -56,5 +56,8 @@
         "cfenv": "cpp",
         "cinttypes": "cpp",
         "typeinfo": "cpp"
-    }
+    },
+    "cSpell.words": [
+        "Keypoint"
+    ]
 }

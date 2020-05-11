@@ -82,7 +82,7 @@ void clusterLidarWithROI(std::vector<BoundingBox> &boundingBoxes, std::vector<Li
 }
 
 
-void show3DObjects(std::vector<BoundingBox> &boundingBoxes, cv::Size worldSize, cv::Size imageSize, bool bWait)
+void show3DObjects(std::vector<BoundingBox> &boundingBoxes, cv::Size worldSize, cv::Size imageSize, std::string savePath, bool bWait )
 {
     // create topview image
     cv::Mat topviewImg(imageSize, CV_8UC3, cv::Scalar(255, 255, 255));
@@ -139,16 +139,18 @@ void show3DObjects(std::vector<BoundingBox> &boundingBoxes, cv::Size worldSize, 
         cv::line(topviewImg, cv::Point(0, y), cv::Point(imageSize.width, y), cv::Scalar(255, 0, 0));
     }
 
+    
+    cv::imwrite( savePath, topviewImg );
     // display image
-    string windowName = "3D Objects";
-    cv::namedWindow(windowName, 1);
-    cv::resize(topviewImg, topviewImg, cv::Size(), 0.5, 0.5);
-    cv::imshow(windowName, topviewImg);
+    // string windowName = "3D Objects";
+    // cv::namedWindow(windowName, 1);
+    // cv::resize(topviewImg, topviewImg, cv::Size(), 0.5, 0.5);
+    // cv::imshow(windowName, topviewImg);
 
-    if(bWait)
-    {
-        cv::waitKey(0); // wait for key to be pressed
-    }
+    // if(bWait)
+    // {
+        // cv::waitKey(0); // wait for key to be pressed
+    // }
 }
 
 
@@ -239,30 +241,48 @@ void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
 {
     // auxiliary variables
     double dT = 1 /frameRate;        // time between two measurements in seconds
-    double laneWidth = 4.0; // assumed width of the ego lane
 
-    // find closest distance to Lidar points within ego lane
-    double minXPrev = 1e9, minXCurr = 1e9;
-    for (auto it = lidarPointsPrev.begin(); it != lidarPointsPrev.end(); ++it)
-    {
-        
-        if (abs(it->y) <= laneWidth / 2.0)
-        { // 3D point within ego lane?
-            minXPrev = minXPrev > it->x ? it->x : minXPrev;
-        }
-    }
+    // find avg distance to Lidar points 
+    
+    double xAvgPrev = std::accumulate(lidarPointsPrev.begin(), lidarPointsPrev.end(), 0.0,
+            [](double sum, const LidarPoint& i) { return sum + i.x ;}) /lidarPointsPrev.size();
 
-    for (auto it = lidarPointsCurr.begin(); it != lidarPointsCurr.end(); ++it)
-    {
+    double xAvgCurr = std::accumulate(lidarPointsCurr.begin(), lidarPointsCurr.end(), 0.0,
+            [](double sum, const LidarPoint& i) { return sum + i.x ;}) /lidarPointsCurr.size();
+    
+    // compute TTC from both measurements based on average point
+    TTC = xAvgCurr * dT / (xAvgPrev - xAvgCurr);
 
-        if (abs(it->y) <= laneWidth / 2.0)
-        { // 3D point within ego lane?
-            minXCurr = minXCurr > it->x ? it->x : minXCurr;
-        }
-    }
+    // // extract X components from lidar points for further filtering 
+    // std::vector<double> xPrev;
+    // std::vector<double> xCurr;
+    // std::transform(lidarPointsPrev.begin(), lidarPointsPrev.end(), std::back_inserter(xPrev),
+    //            [](LidarPoint const& i) { return i.x; });
 
-    // compute TTC from both measurements
-    TTC = minXCurr * dT / (minXPrev - minXCurr);
+    // std::transform(lidarPointsCurr.begin(), lidarPointsCurr.end(), std::back_inserter(xCurr),
+    //            [](LidarPoint const& i) { return i.x; });
+
+    // auto prev_iqr = IQR_testintervals(xPrev);
+    // auto curr_iqr = IQR_testintervals(xCurr);
+    // double minXPrev = 1e9, minXCurr = 1e9;
+    // for (auto it = lidarPointsPrev.begin(); it != lidarPointsPrev.end(); ++it)
+    // {
+    //         if(it->x > prev_iqr.first && it->x < prev_iqr.second)
+    //         {
+    //             minXPrev = minXPrev > it->x ? it->x : minXPrev;
+    //         }
+    // }
+
+    // for (auto it = lidarPointsCurr.begin(); it != lidarPointsCurr.end(); ++it)
+    // {
+    //         if(it->x > curr_iqr.first && it->x < curr_iqr.second)
+    //         {
+    //             minXCurr = minXCurr > it->x ? it->x : minXCurr;
+    //         }
+    // }
+
+    // // compute TTC from both measurements based on average point
+    // TTC = minXCurr * dT / (minXPrev - minXCurr);
 }
 
 

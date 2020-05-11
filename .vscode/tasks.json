@@ -22,7 +22,8 @@
             "group": {
                 "kind": "build",
                 "isDefault": true
-            }          
+            },
+            "dependsOn":["cmake"]     
         }
     ],
     "version": "2.0.0"
